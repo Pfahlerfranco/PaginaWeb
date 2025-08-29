@@ -1,5 +1,24 @@
-# Dependencias
+# Node
 node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml
+dist/
+build/
+coverage/
+tmp/
 
-# Archivos de entorno
+# Env y secretos
 .env
+.env.*
+
+# Datos, logs, uploads
+data/
+uploads/
+logs/
+
+# OS/Editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
