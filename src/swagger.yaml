@@ -1,0 +1,364 @@
+openapi: 3.0.3
+info:
+  title: Portfolio API
+  version: "1.0.0"
+  description: |
+    API para gestionar proyectos de portafolio y mensajes de contacto.
+    - **Auth**: login simple por `.env` que devuelve JWT.
+    - **CORS**: configurado para tu front (FRONTEND_ORIGIN).
+servers:
+  - url: http://localhost:5000
+    description: Local
+
+tags:
+  - name: System
+  - name: Auth
+  - name: Portfolio
+  - name: Contact
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    IdParam:
+      name: id
+      in: path
+      required: true
+      description: ObjectId de MongoDB
+      schema:
+        type: string
+        pattern: "^[0-9a-fA-F]{24}$"
+
+    QParam:
+      name: q
+      in: query
+      description: Búsqueda por texto (usa índice de texto)
+      schema: { type: string }
+    TagParam:
+      name: tag
+      in: query
+      description: Filtrar por tag exacto
+      schema: { type: string }
+    DestacadoParam:
+      name: destacado
+      in: query
+      description: Filtrar por destacados
+      schema: { type: boolean }
+    PageParam:
+      name: page
+      in: query
+      description: Número de página (1..n)
+      schema: { type: integer, minimum: 1, default: 1 }
+    LimitParam:
+      name: limit
+      in: query
+      description: Tamaño de página (1..50)
+      schema: { type: integer, minimum: 1, maximum: 50, default: 12 }
+    SortParam:
+      name: sort
+      in: query
+      description: Orden
+      schema:
+        type: string
+        enum: [recientes, antiguos, titulo_asc, titulo_desc]
+        default: recientes
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error: { type: string, example: "Error al crear el proyecto" }
+    ValidationError:
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  path: { type: string, example: "titulo" }
+                  message: { type: string, example: "\"titulo\" length must be at least 3 characters long" }
+
+    Meta:
+      type: object
+      properties:
+        page: { type: integer, example: 1 }
+        limit: { type: integer, example: 12 }
+        total: { type: integer, example: 27 }
+        totalPages: { type: integer, example: 3 }
+        hasPrev: { type: boolean, example: false }
+        hasNext: { type: boolean, example: true }
+
+    Proyecto:
+      type: object
+      properties:
+        _id: { type: string, example: "665f1b2c3a4d5e6f7a8b9c0d" }
+        titulo: { type: string, example: "Portfolio Web" }
+        descripcion: { type: string, example: "Sitio personal con React y Tailwind." }
+        tecnologias:
+          type: array
+          items: { type: string }
+          example: ["React","Vite","Tailwind"]
+        imagen: { type: string, nullable: true, example: "https://..." }
+        repo: { type: string, nullable: true, example: "https://github.com/usuario/portfolio" }
+        demo: { type: string, nullable: true, example: "https://mi-sitio.com" }
+        tags:
+          type: array
+          items: { type: string }
+          example: ["frontend","personal"]
+        destacado: { type: boolean, example: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ProyectoInput:
+      type: object
+      required: [titulo, descripcion]
+      properties:
+        titulo: { type: string, minLength: 3, maxLength: 120, example: "API Portfolio" }
+        descripcion: { type: string, minLength: 10, example: "Backend con Node/Express/Mongo." }
+        tecnologias:
+          type: array
+          items: { type: string }
+          example: ["Node","Express","MongoDB"]
+        imagen: { type: string, nullable: true, example: "https://..." }
+        repo: { type: string, nullable: true, example: "https://github.com/usuario/api-portfolio" }
+        demo: { type: string, nullable: true, example: "https://api.mi-sitio.com" }
+        tags:
+          type: array
+          items: { type: string }
+          example: ["backend"]
+        destacado: { type: boolean, example: false }
+
+    Contacto:
+      type: object
+      properties:
+        _id: { type: string }
+        nombre: { type: string, example: "Franco" }
+        email: { type: string, format: email, example: "franco@test.com" }
+        mensaje: { type: string, example: "Hola, me gustaría contactarme." }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ContactoInput:
+      type: object
+      required: [nombre, email, mensaje]
+      properties:
+        nombre: { type: string, minLength: 2, maxLength: 120, example: "Franco" }
+        email: { type: string, format: email, example: "franco@test.com" }
+        mensaje: { type: string, minLength: 10, maxLength: 2000, example: "Hola, quiero hablar sobre un proyecto." }
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, example: "admin@local.test" }
+        password: { type: string, example: "admin123" }
+    LoginResponse:
+      type: object
+      properties:
+        token: { type: string, example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." }
+
+  responses:
+    Unauthorized:
+      description: No autorizado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ValidationError' }
+
+paths:
+  /api/health:
+    get:
+      tags: [System]
+      summary: Healthcheck
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+                  ts: { type: integer, example: 1756399091824 }
+
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: Login admin (JWT por .env)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/LoginResponse' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /api/portfolio:
+    get:
+      tags: [Portfolio]
+      summary: Listar proyectos (paginado y filtros)
+      parameters:
+        - $ref: '#/components/parameters/QParam'
+        - $ref: '#/components/parameters/TagParam'
+        - $ref: '#/components/parameters/DestacadoParam'
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/SortParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  meta: { $ref: '#/components/schemas/Meta' }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Proyecto' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+    post:
+      tags: [Portfolio]
+      summary: Crear proyecto
+      security: [ { BearerAuth: [] } ]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProyectoInput' }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proyecto' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+
+  /api/portfolio/{id}:
+    put:
+      tags: [Portfolio]
+      summary: Actualizar proyecto
+      security: [ { BearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProyectoInput' }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Proyecto' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Portfolio]
+      summary: Eliminar proyecto
+      security: [ { BearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string, example: "Proyecto eliminado correctamente" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+
+  /api/contact:
+    post:
+      tags: [Contact]
+      summary: Crear mensaje (público)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactoInput' }
+      responses:
+        "201":
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contacto' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+    get:
+      tags: [Contact]
+      summary: Listar mensajes (admin)
+      security: [ { BearerAuth: [] } ]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Contacto' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    put:
+      tags: [Contact]
+      summary: Actualizar mensaje
+      security: [ { BearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ContactoInput' }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Contacto' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Contact]
+      summary: Eliminar mensaje
+      security: [ { BearerAuth: [] } ]
+      parameters:
+        - $ref: '#/components/parameters/IdParam'
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string, example: "Mensaje eliminado correctamente" }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
